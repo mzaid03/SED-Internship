@@ -9,9 +9,7 @@ export function getSupabaseClient() {
 	const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
 	if (!supabaseUrl || !supabaseAnonKey) {
-		throw new Error(
-			'Missing Supabase env vars. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.',
-		)
+		return null
 	}
 
 	browserClient = createClient(supabaseUrl, supabaseAnonKey, {
@@ -27,6 +25,11 @@ export function getSupabaseClient() {
 
 export async function ensureGuestSession() {
 	const supabase = getSupabaseClient()
+	if (!supabase) {
+		throw new Error(
+			'Missing Supabase env vars. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.',
+		)
+	}
 	const { data: existing } = await supabase.auth.getSession()
 	if (existing.session) return existing.session
 

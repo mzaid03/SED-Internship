@@ -3,6 +3,13 @@
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 
 import { ensureGuestSession, getSupabaseClient } from '@/lib/supabaseClient'
+import {
+  createDemoTask,
+  getOrCreateDemoGuestId,
+  loadDemoTasks,
+  resetDemoGuestId,
+  toggleDemoTaskComplete,
+} from '@/lib/demoStore'
 import type { Task, TaskPriority } from '@/lib/types'
 
 function shortId(id: string) {
@@ -12,6 +19,7 @@ function shortId(id: string) {
 
 export default function Home() {
   const [supabase, setSupabase] = useState<ReturnType<typeof getSupabaseClient> | null>(null)
+  const [mode, setMode] = useState<'supabase' | 'demo'>('supabase')
   const [userId, setUserId] = useState<string | null>(null)
   const [loadingAuth, setLoadingAuth] = useState(true)
   const [loadingTasks, setLoadingTasks] = useState(false)
@@ -35,7 +43,23 @@ export default function Home() {
       setLoadingAuth(true)
       try {
         const client = getSupabaseClient()
-        if (!cancelled) setSupabase(client)
+
+        if (!client) {
+				// Demo mode (no Supabase configured yet)
+				const demoUserId = getOrCreateDemoGuestId()
+				if (!cancelled) {
+					setMode('demo')
+					setSupabase(null)
+					setUserId(demoUserId)
+					setTasks(loadDemoTasks(demoUserId))
+				}
+				return
+			}
+
+        if (!cancelled) {
+				setMode('supabase')
+				setSupabase(client)
+			}
 
         const session = await ensureGuestSession()
         if (!cancelled) setUserId(session?.user.id ?? null)
@@ -51,10 +75,12 @@ export default function Home() {
     let unsub: (() => void) | null = null
     try {
       const client = getSupabaseClient()
-      const { data: sub } = client.auth.onAuthStateChange((_event, session) => {
-        setUserId(session?.user.id ?? null)
-      })
-      unsub = () => sub.subscription.unsubscribe()
+      if (client) {
+				const { data: sub } = client.auth.onAuthStateChange((_event, session) => {
+					setUserId(session?.user.id ?? null)
+				})
+				unsub = () => sub.subscription.unsubscribe()
+			}
     } catch {
       // If env vars are missing, we already show the error state.
     }
@@ -67,7 +93,12 @@ export default function Home() {
 
   const loadTasks = useCallback(
     async (currentUserId: string) => {
-      if (!supabase) return
+      if (mode === 'demo') {
+				setError(null)
+				setTasks(loadDemoTasks(currentUserId))
+				return
+			}
+			if (!supabase) return
       setError(null)
       setLoadingTasks(true)
       try {
@@ -84,17 +115,18 @@ export default function Home() {
         setLoadingTasks(false)
       }
     },
-    [supabase],
+    [supabase, mode],
   )
 
   useEffect(() => {
-    if (!userId || !supabase) return
+    if (!userId) return
+    if (mode === 'supabase' && !supabase) return
     loadTasks(userId)
-  }, [userId, supabase, loadTasks])
+  }, [userId, supabase, loadTasks, mode])
 
   async function handleCreate(e: FormEvent) {
     e.preventDefault()
-    if (!userId || !supabase) return
+    if (!userId) return
     if (!title.trim()) {
       setError('Title is required.')
       return
@@ -103,14 +135,24 @@ export default function Home() {
     setCreating(true)
     setError(null)
     try {
-      const { error: insertError } = await supabase.from('tasks').insert({
-        title: title.trim(),
-        description: description.trim() ? description.trim() : null,
-        priority,
-        due_date: dueDate ? dueDate : null,
-        user_id: userId,
-      })
-      if (insertError) throw insertError
+      if (mode === 'demo') {
+				createDemoTask(userId, {
+					title: title.trim(),
+					description: description.trim() ? description.trim() : null,
+					priority,
+					due_date: dueDate ? dueDate : null,
+				})
+			} else {
+				if (!supabase) throw new Error('Supabase client not initialized.')
+				const { error: insertError } = await supabase.from('tasks').insert({
+					title: title.trim(),
+					description: description.trim() ? description.trim() : null,
+					priority,
+					due_date: dueDate ? dueDate : null,
+					user_id: userId,
+				})
+				if (insertError) throw insertError
+			}
       setTitle('')
       setDescription('')
       setPriority('normal')
@@ -124,7 +166,20 @@ export default function Home() {
   }
 
   async function handleToggleComplete(task: Task) {
-    if (!supabase) return
+    if (mode === 'demo') {
+        setUpdatingId(task.id)
+        setError(null)
+        try {
+          const next = toggleDemoTaskComplete(task.user_id, task.id)
+          setTasks(next)
+        } catch (e) {
+          setError(e instanceof Error ? e.message : 'Failed to update task.')
+        } finally {
+          setUpdatingId(null)
+        }
+        return
+      }
+      if (!supabase) return
     setUpdatingId(task.id)
     setError(null)
     try {
@@ -144,10 +199,14 @@ export default function Home() {
   }
 
   async function handleNewGuest() {
-    if (!supabase) return
     setError(null)
     try {
-      await supabase.auth.signOut()
+      if (mode === 'demo') {
+				resetDemoGuestId()
+			} else {
+				if (!supabase) throw new Error('Supabase client not initialized.')
+				await supabase.auth.signOut()
+			}
       window.location.reload()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to reset guest session.')
@@ -179,13 +238,22 @@ export default function Home() {
               <span>Creating guest session…</span>
             ) : userId ? (
               <span>
-                Guest user: <span className="font-mono">{shortId(userId)}</span>
+                {mode === 'demo' ? 'Demo user' : 'Guest user'}:{' '}
+                <span className="font-mono">{shortId(userId)}</span>
               </span>
             ) : (
               <span>Not signed in.</span>
             )}
           </div>
         </header>
+
+        {mode === 'demo' ? (
+          <div className="mt-6 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <strong>Demo mode:</strong> Supabase isn’t configured yet, so tasks are saved only in this
+             browser (localStorage). Add `NEXT_PUBLIC_SUPABASE_URL` and
+             `NEXT_PUBLIC_SUPABASE_ANON_KEY` in `.env.local` to enable real persistence + RLS.
+          </div>
+        ) : null}
 
         {error ? (
           <div className="mt-6 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
