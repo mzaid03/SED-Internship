@@ -274,7 +274,6 @@ export default function Home() {
               </div>
               <div>
                 <h1 className="text-2xl font-semibold tracking-tight">Task Manager</h1>
-                <p className="text-sm text-slate-300">Supabase + anonymous guest sessions + RLS</p>
               </div>
             </div>
 
