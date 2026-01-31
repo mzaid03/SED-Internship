@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Task Manager",
+  title: "Tasklee",
   description: "A simple task manager using Supabase guest auth and RLS.",
 };
 

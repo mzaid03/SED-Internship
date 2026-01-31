@@ -273,7 +273,7 @@ export default function Home() {
                 </svg>
               </div>
               <div>
-                <h1 className="text-2xl font-semibold tracking-tight">Task Manager</h1>
+                <h1 className="text-2xl font-semibold tracking-tight">Tasklee</h1>
               </div>
             </div>
 
