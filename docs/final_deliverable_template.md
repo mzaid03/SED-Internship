@@ -1,46 +1,91 @@
-# Task Manager Assessment – Final Deliverable
+# Tasklee – Task Manager Assessment (Final Deliverable)
 
-> Rename/export as: `firstname_lastname_task_manager_assessment.pdf` (or `.docx`)
+Export/submit as:
+- `firstname_lastname_task_manager_assessment.pdf` (or `.docx`)
 
-## Overview
-- Built a simple task manager with a Next.js (TypeScript) web frontend.
-- Uses Supabase (Free Tier) for database + anonymous auth “guest accounts”.
-- Row Level Security (RLS) ensures each guest only sees their own tasks.
+## 1) Overview
+Tasklee is a simple task manager web app built with Next.js (TypeScript) and Supabase.
 
-## Live Demo
-- Live URL: <ADD_VERCEL_URL_HERE>
+Core features:
+- Create tasks, view tasks, toggle complete/incomplete
+- Guest accounts (Supabase anonymous sign-in) created automatically on first load
+- Tasks are scoped per user via `user_id`
+- Row Level Security (RLS) policies enforce that users can only read/write their own tasks
+- Clear loading states and error states
 
-## GitHub Repository
-- Repo URL: <ADD_GITHUB_REPO_URL_HERE>
+Optional/bonus fields supported:
+- Description
+- Priority (`low` / `normal` / `high`)
+- Due date
 
-## Supabase Project
-- Project URL (or dashboard link): <ADD_SUPABASE_PROJECT_URL_HERE>
+## 2) Live Frontend App
+- Live URL: <PASTE_YOUR_VERCEL_URL_HERE>
+
+## 3) GitHub Repository
+- Repo URL: https://github.com/mzaid03/taskly.git
+
+## 4) Supabase Project / Table
+- Supabase Project URL (dashboard link is fine): <PASTE_YOUR_SUPABASE_PROJECT_URL_HERE>
 - Table: `public.tasks`
 
-## Local Setup
-1. Install deps:
+## 5) Local Setup Instructions
+
+### Prerequisites
+- Node.js installed
+- A Supabase project (Free Tier)
+
+### Steps
+1. Install dependencies:
    - `npm.cmd install`
-2. Create `.env.local` from `.env.example` and set:
-   - `NEXT_PUBLIC_SUPABASE_URL`
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-3. In Supabase SQL Editor, run:
-   - `supabase/schema.sql`
-4. Start dev server:
+
+2. Enable anonymous guest sign-in:
+   - Supabase → Authentication → Providers → Anonymous → Enable
+
+3. Create the database schema + RLS policies:
+   - Supabase → SQL Editor → run the SQL from `supabase/schema.sql`
+
+4. Configure environment variables:
+   - Copy `.env.example` → `.env.local`
+   - Set:
+     - `NEXT_PUBLIC_SUPABASE_URL`
+     - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+
+5. Start the dev server:
    - `npm.cmd run dev`
-5. Open:
-   - `http://localhost:3000`
 
-## Database Schema
-- See `supabase/schema.sql` (table + RLS policies)
+6. Open the app:
+   - http://localhost:3000
 
-## Tradeoffs / Improvements
-- Add optimistic UI updates + better offline handling.
-- Add pagination or infinite scroll for large task lists.
-- Add delete task + edit task.
-- Add filtering/sorting (complete/incomplete, priority, due date).
-- Add end-to-end tests and CI.
+## 6) Database Schema
 
-## Security Notes
-- Frontend uses only the public Supabase anon key.
-- RLS is enabled on `tasks` to prevent cross-user access.
-- No service role key is stored in the client or committed to GitHub.
+The schema is implemented in `supabase/schema.sql`.
+
+### Table
+`public.tasks` fields:
+- `id` uuid primary key
+- `user_id` uuid (ties each task to the authenticated guest user)
+- `title` text (required)
+- `description` text (optional)
+- `priority` text with constraint (`low|normal|high`), default `normal`
+- `due_date` date (optional)
+- `is_complete` boolean default `false`
+- `created_at` timestamp default `now()`
+
+### RLS Policies
+RLS is enabled on `public.tasks`, with policies that ensure:
+- Users can only SELECT rows where `user_id = auth.uid()`
+- Users can only INSERT rows where `user_id = auth.uid()`
+- Users can only UPDATE rows where `user_id = auth.uid()`
+- (Optional) Users can only DELETE rows where `user_id = auth.uid()`
+
+## 7) Tradeoffs / Improvements
+- Add edit/delete task and better task organization (filters by status, priority, due date)
+- Add pagination/infinite scroll for large lists
+- Add optimistic UI updates and offline-friendly behavior
+- Add end-to-end tests (Playwright) + CI pipeline
+- Add better accessibility polish (keyboard navigation, ARIA labels)
+
+## 8) Security Notes
+- The frontend uses only the Supabase **anon/public** key.
+- The Supabase **service role key is never used in the browser** and must not be committed.
+- RLS is the primary security boundary: even if a user tampers with requests, Postgres policies prevent cross-user access.
